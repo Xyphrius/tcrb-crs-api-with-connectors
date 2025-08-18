@@ -1,5 +1,8 @@
 # TCRB CRS API
 
+[![CI/CD](https://github.com/Xyphrius/tcrb-crs-api-with-connectors/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/Xyphrius/tcrb-crs-api-with-connectors/actions/workflows/ci-cd.yml)
+
+
 A production-ready Node.js API for TCRB CRS (Cannabis Retail Score) calculations with automated CI/CD, Kubernetes deployment, and Notion integration.
 
 ## 🚀 Features
@@ -276,6 +279,50 @@ For issues and questions:
 - Review the health endpoints
 - Check Sentry for error details
 - Verify Kubernetes pod status
+
+- ## 📋 Operations Runbook
+
+### Deployment
+
+```bash
+# Deploy new version
+git tag v1.x.x
+git push origin v1.x.x
+
+# Monitor deployment
+kubectl rollout status deployment/tcrb-crs-api --timeout=120s
+kubectl get pods -l app=tcrb-crs-api
+```
+
+### Rollback
+
+```bash
+# Rollback to previous version
+kubectl rollout undo deployment/tcrb-crs-api
+kubectl rollout status deployment/tcrb-crs-api --timeout=120s
+```
+
+### Hotfix
+
+```bash
+# For urgent fixes
+1. Create hotfix branch from main
+2. Make minimal changes
+3. Test locally: make smoke
+4. Create PR and merge
+5. Tag and deploy: git tag v1.x.x-hotfix.1
+```
+
+### Health Monitoring
+
+```bash
+# Check application health
+curl -s http://localhost:8080/health | jq .
+curl -s http://localhost:8080/metrics | jq .
+
+# Port forward for local testing
+kubectl port-forward svc/tcrb-crs-api 8080:80
+```
 
 ---
 
