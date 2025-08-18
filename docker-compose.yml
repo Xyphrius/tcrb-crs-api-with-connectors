@@ -1,0 +1,33 @@
+services:
+  db:
+    image: postgres:15
+    container_name: tcrb-crs-api-db-1
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: tcrb
+    ports:
+      - "5433:5432"         # host:container (5433 avoids conflicts)
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro  # auto-runs *.sql on first boot
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d tcrb"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7
+    container_name: tcrb-crs-api-redis-1
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  pgdata:

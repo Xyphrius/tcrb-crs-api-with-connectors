@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tcrb-crs-api
+  labels:
+    app: tcrb-crs-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tcrb-crs-api
+  template:
+    metadata:
+      labels:
+        app: tcrb-crs-api
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/your-org/tcrb-crs-api:placeholder
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            # minimal example; point these at your managed services in prod
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "8080"
+            - name: PGHOST
+              valueFrom:
+                secretKeyRef:
+                  name: tcrb-secrets
+                  key: PGHOST
+            - name: PGPORT
+              value: "5432"
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: tcrb-secrets
+                  key: PGUSER
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tcrb-secrets
+                  key: PGPASSWORD
+            - name: PGDATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: tcrb-secrets
+                  key: PGDATABASE
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: tcrb-secrets
+                  key: REDIS_URL
+            - name: SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: tcrb-secrets
+                  key: SENTRY_DSN
+            - name: NOTION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: tcrb-secrets
+                  key: NOTION_TOKEN
+            - name: NOTION_CRS_DATABASE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: tcrb-secrets
+                  key: NOTION_CRS_DATABASE_ID
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+            successThreshold: 1
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

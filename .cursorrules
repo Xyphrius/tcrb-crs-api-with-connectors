@@ -1,0 +1,98 @@
+# === TCRB / CRS — Cursor Rules ============================================
+# Purpose: make Cursor run + edit the project safely and consistently.
+# File lives at repo root: `.cursorrules`
+
+# --- Safety & Style ---
+- Never commit secrets. Do not read or write `.env`, `.env.*` to VCS.
+- Node 20+, CommonJS. Prefer small, focused diffs.
+- Use pino logs, helmet, cors, express-rate-limit, Joi for input validation.
+- DB/Redis/Notion credentials ONLY from process.env. No literals.
+- Keep Makefile and npm scripts as the primary entry points.
+
+# --- Project Structure Hints (do not change paths unless asked) ---
+- API entry: `server.js` (uses `src/server/app.js`)
+- Notion sync: `src/notion/sync-scores.js`
+- Ingest: `src/ingest/run.js`
+- Normalizers: `src/jobs/normalize-*.js`
+- Scoring: `src/jobs/compute-scores.js`
+- DB schema/migrations: `db/init/*.sql`, `db/migrations/*.sql`
+
+# --- Preferred Commands (Cursor can run these) ---
+RUN: docker compose up -d db redis
+RUN: npm install
+RUN: npm run dev
+RUN: curl -s http://localhost:8080/health | jq .
+RUN: make e2e
+RUN: make migrate
+RUN: npm run compute:scores
+RUN: make sync-notion
+
+# --- One-shot flows --------------------------------------------------------
+
+# Bring services up + verify health
+FLOW "bring-up":
+  - RUN: docker compose up -d db redis
+  - RUN: npm install
+  - RUN: npm run dev
+  - RUN: curl -s http://localhost:8080/health | jq .
+
+# Full E2E: ingest → normalize → score → test API
+FLOW "e2e":
+  - RUN: make e2e
+
+# Compute scores and sync to Notion (requires NOTION_* envs)
+FLOW "scores->notion->readback":
+  - ENV REQUIRED: NOTION_TOKEN, NOTION_CRS_DATABASE_ID
+  - RUN: npm run compute:scores
+  - RUN: make sync-notion   # includes read-back verification
+
+# Migrations
+FLOW "migrate-db":
+  - RUN: make migrate
+
+# --- DB bootstrap & smoke checks ------------------------------------------
+FLOW "bootstrap-db":
+  - RUN: docker compose down -v
+  - RUN: docker compose up -d db redis
+  - RUN: docker compose exec -T db bash -lc 'until pg_isready -U postgres -d tcrb; do sleep 1; done'
+  - RUN: make smoke
+
+FLOW "api-dev":
+  - RUN: npm run dev
+  - RUN: curl -s http://localhost:8080/health | jq .
+
+FLOW "smoke":
+  - RUN: make smoke
+
+# --- Scores -> Notion sync (compute → sync → read-back verify) ------------
+FLOW "scores->notion":
+  - ENV REQUIRED: NOTION_TOKEN, NOTION_CRS_DATABASE_ID
+  - RUN: npm run compute:scores
+  - RUN: make sync-notion
+
+FLOW "docker-prod":
+  - RUN: docker compose -f docker-compose.prod.yml up -d
+  - RUN: sleep 5 && curl -s http://localhost:8080/health && echo
+  - RUN: curl -s http://localhost:8080/metrics && echo
+
+# --- Edit Policy -----------------------------------------------------------
+- Do not rename public routes without instruction.
+- Keep `/health` fast and read-only.
+- For new routes under `/v1/*`, add Joi validation and error handling pattern used in `server.js`.
+
+# --- Testing & Validation --------------------------------------------------
+- After changes to scoring, re-run:
+  - RUN: npm run compute:scores
+  - RUN: make sync-notion
+- After DB schema or index changes:
+  - RUN: make migrate
+  - RUN: make e2e
+
+# --- Common Fixups ---------------------------------------------------------
+IF error CONTAINS "ECONNREFUSED 127.0.0.1:5432":
+  - RUN: docker compose up -d db
+  - RUN: curl -s http://localhost:8080/health | jq .
+IF error CONTAINS "Missing script":
+  - Open `package.json` and ensure the script exists, keep style consistent.
+IF error CONTAINS "429" AND "Notion":
+  - Back off and retry; use `src/notion/notion-client.js` with p-retry (already wired).

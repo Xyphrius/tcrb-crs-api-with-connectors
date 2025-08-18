@@ -1,0 +1,14 @@
+{
+  "projectName": "TCRB CRS API",
+  "commands": [
+    { "name": "DB: Bootstrap (reset + seed + smoke)", "run": "make reset-db && make smoke" },
+    { "name": "DB: Up (no wipe)", "run": "make up" },
+    { "name": "API: Start (dev)", "run": "npm run dev" },
+    { "name": "API: Health", "run": "curl -s http://localhost:8080/health | jq ." },
+    { "name": "Smoke Tests", "run": "make smoke" },
+    { "name": "Product Score (Demo)", "run": "PID=$(docker compose exec -T db psql -U postgres -d tcrb -Atc \"SELECT id FROM products WHERE name='Demo OG 1g' LIMIT 1;\"); curl -s \"http://localhost:8080/v1/products/$PID/score\" | jq ." },
+    { "name": "Prod: Up (compose)", "run": "docker compose -f docker-compose.prod.yml up -d" },
+    { "name": "Prod: Health", "run": "curl -s http://localhost:8080/health | jq ." },
+    { "name": "Prod: Metrics", "run": "curl -s http://localhost:8080/metrics | jq ." }
+  ]
+}
