@@ -1,28 +1,44 @@
-name: scores-cron
+name: Compute & Sync Scores (3x daily)
+
 on:
   schedule:
-    - cron: "0 14,18,22 * * *"   # 9a/1p/5p ET (adjust if DST/region differs)
-  workflow_dispatch: {}
+    - cron: "0 13,17,21 * * *"   # 9a, 1p, 5p America/New_York (handles DST by you adjusting times seasonally if needed)
+  workflow_dispatch:
 
 jobs:
-  run-scores:
+  compute-sync:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20 }
-      - run: npm ci
-      - name: Compute & persist scores
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Compute scores
         env:
-          NODE_ENV: production
           PGHOST: ${{ secrets.PGHOST }}
           PGPORT: ${{ secrets.PGPORT }}
           PGUSER: ${{ secrets.PGUSER }}
           PGPASSWORD: ${{ secrets.PGPASSWORD }}
           PGDATABASE: ${{ secrets.PGDATABASE }}
-          REDIS_URL: ${{ secrets.REDIS_URL }}
+        run: npm run compute:scores
+
+      - name: Sync to Notion
+        if: ${{ secrets.NOTION_TOKEN != '' && secrets.NOTION_CRS_DATABASE_ID != '' }}
+        env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_CRS_DATABASE_ID: ${{ secrets.NOTION_CRS_DATABASE_ID }}
-          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
-          PGSSLMODE: require
-        run: node src/jobs/compute-scores.js
+          PGHOST: ${{ secrets.PGHOST }}
+          PGPORT: ${{ secrets.PGPORT }}
+          PGUSER: ${{ secrets.PGUSER }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD }}
+          PGDATABASE: ${{ secrets.PGDATABASE }}
+        run: node src/notion/sync-scores.js
