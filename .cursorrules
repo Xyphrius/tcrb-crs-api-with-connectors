@@ -75,6 +75,11 @@ FLOW "docker-prod":
   - RUN: sleep 5 && curl -s http://localhost:8080/health && echo
   - RUN: curl -s http://localhost:8080/metrics && echo
 
+# --- CI: push prod secrets -> run pipeline ---
+FLOW "prod-secrets->ci":
+  - RUN: ./scripts/ci-secrets.sh
+  - NOTE: "This reads .env.prod, sets GitHub Actions secrets, mirrors to k8s, and pushes to trigger CI."
+
 # --- Edit Policy -----------------------------------------------------------
 - Do not rename public routes without instruction.
 - Keep `/health` fast and read-only.

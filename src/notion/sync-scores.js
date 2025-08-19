@@ -11,11 +11,11 @@ const databaseId = process.env.NOTION_CRS_DATABASE_ID;
 
 async function syncScoresToNotion() {
   const pool = new Pool({ 
-    user: 'postgres', 
-    host: 'localhost', 
-    database: 'tcrb', 
-    password: 'postgres', 
-    port: 5432 
+    user: process.env.PGUSER || 'postgres', 
+    host: process.env.PGHOST || 'localhost', 
+    database: process.env.PGDATABASE || 'tcrb', 
+    password: process.env.PGPASSWORD || 'postgres', 
+    port: process.env.PGPORT || 5432 
   });
   
   const client = await pool.connect();
