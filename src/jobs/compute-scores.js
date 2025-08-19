@@ -9,7 +9,7 @@ function score(features) {
 }
 
 (async () => {
-  const pool = new Pool({ user:'postgres', host:'localhost', database:'tcrb', password:'postgres', port:5432 });
+  const pool = new Pool({ user:'postgres', host:'localhost', database:'tcrb', password:'postgres', port:5433 });
   const client = await pool.connect();
   try {
     const { rows: prods } = await client.query(`select id from products limit 50`);
