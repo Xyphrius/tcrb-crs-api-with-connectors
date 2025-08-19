@@ -1,6 +1,6 @@
 services:
   api:
-    image: ghcr.io/your-org/tcrb-crs-api:prod  # set your image tag
+    build: .  # Build locally instead of pulling from registry
     container_name: tcrb-crs-api
     restart: unless-stopped
     env_file:
