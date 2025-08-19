@@ -11,7 +11,19 @@ Sentry.init({
   tracesSampleRate: 0.1,            // adjust as needed
   profilesSampleRate: 0.1,          // optional profiling
   integrations: [nodeProfilingIntegration()],
-  environment: process.env.NODE_ENV || 'development'
+  environment: process.env.NODE_ENV || 'development',
+  beforeSend(event, hint) {
+    // Strip sensitive data
+    if (event.request) {
+      delete event.request.headers.authorization;
+      delete event.request.headers.cookie;
+      delete event.request.body;
+    }
+    if (event.user) {
+      delete event.user.ip_address;
+    }
+    return event;
+  }
 });
 
 // --- Request ID + logging ---
@@ -48,8 +60,53 @@ app.use((req, _res, next) => {
 // --- Security middleware ---
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-app.use(helmet());
-app.use(rateLimit({ windowMs: 60 * 1000, max: 100 }));
+const cors = require('cors');
+
+// Security hardening
+app.disable('x-powered-by');
+app.set('trust proxy', 1);
+
+// CORS with allowlist
+const allowlist = (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin || allowlist.includes(origin)) return cb(null, true);
+    return cb(new Error('CORS blocked'), false);
+  },
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  credentials: false,
+  optionsSuccessStatus: 204
+}));
+
+// Enhanced helmet configuration
+app.use(helmet({
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+  referrerPolicy: { policy: 'no-referrer' },
+  noSniff: true,
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      "default-src": ["'none'"],
+      "connect-src": ["'self'"]
+    }
+  }
+}));
+
+// Force HTTPS behind proxy (skip health)
+app.use((req, res, next) => {
+  if (req.secure || req.headers['x-forwarded-proto'] === 'https' || req.path === '/health') return next();
+  return res.redirect(308, `https://${req.hostname}${req.originalUrl}`);
+});
+
+// Tight body limits
+app.use(require('express').json({ limit: '100kb' }));
+app.use(require('express').urlencoded({ extended: false, limit: '50kb' }));
+
+// Rate limits
+app.use('/v1/', rateLimit({ windowMs: 60 * 1000, max: 100 }));              // general
+app.use(['/v1/products/:id/score','/v1/compute','/v1/scores'],
+  rateLimit({ windowMs: 60 * 1000, max: 20 })
+);
 
 // --- DB Pool ---
 const { Pool } = require('pg');
@@ -150,8 +207,15 @@ app.get('/v1/products', async (req, res) => {
   }
 });
 
-// /metrics – lightweight JSON (safe for healthchecks)
-app.get('/metrics', (_req, res) => {
+// Metrics gate via header
+const INTERNAL_KEY = process.env.INTERNAL_KEY;
+const checkInternal = (req, res, next) => {
+  if (INTERNAL_KEY && req.get('X-Internal-Key') === INTERNAL_KEY) return next();
+  return res.status(403).json({ error: 'Forbidden' });
+};
+
+// /metrics – lightweight JSON (gated)
+app.get('/metrics', checkInternal, (_req, res) => {
   const m = process.memoryUsage();
   res.json({
     timestamp: new Date().toISOString(),
@@ -168,7 +232,7 @@ app.get('/metrics', (_req, res) => {
 });
 
 // (Optional Prometheus text variant:)
-app.get('/metrics/prom', (_req, res) => {
+app.get('/metrics/prom', checkInternal, (_req, res) => {
   const m = process.memoryUsage();
   res.set('Content-Type', 'text/plain; version=0.0.4');
   res.send(
